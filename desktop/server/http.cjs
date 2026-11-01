@@ -15,6 +15,33 @@ const { displayTitle } = require("../shared/format.cjs");
 const PORT = Number(process.env.PORT || 3921);
 const HOST = "127.0.0.1";
 
+/** The sample lecture's gloss, in the same shape the live reader expands. */
+const CHALK_BRIEF = {
+  gist: "Huxley argues that a piece of chalk is the dried mud of an ancient deep sea, built up from the skeletons of microscopic Globigerinae, and uses that single object to show how firm the ground under physical science really is. It matters because the same evidence pushes the earth's age far past human history and points toward the slow, natural origin of living forms.",
+  claims: [
+    { text: "Chalk is not a local curiosity but a formation running diagonally across England for over 280 miles and, worldwide, covering an area as great as Europe, reaching more than a thousand feet thick in places.", cite: 4 },
+    { text: "Chemically chalk is almost wholly carbonate of lime, a substance so widespread that chemistry alone cannot distinguish it from the fur inside a sea-kettle.", cite: 10 },
+    { text: "Under the microscope chalk resolves into countless chambered bodies, chiefly Globigerina, embedded in granules, which Huxley calls the spoor of the game he is tracking.", cite: 14 },
+    { text: "Deep-sea soundings from the North Atlantic brought up a grey mud that is substantially chalk, containing the same Globigerinae in a granular matrix.", cite: 21 },
+    { text: "From the inch of mud that could not have accumulated during the life of a Crania and its coralline, Huxley reckons a thousand feet of chalk took more than twelve thousand years.", cite: 37 },
+  ],
+  caveats: [
+    { text: "The twelve thousand years is a minimum Huxley himself calls a low estimate, not a measured age of the chalk.", cite: 38 },
+    { text: "Chemistry cannot tell this chalk from any other carbonate of lime; the argument rests on the microscope and the deep-sea mud.", cite: 11 },
+    { text: "How long a Crania and its coralline take to grow is still unknown, so the duration is an order of magnitude, not a date.", cite: 38 },
+  ],
+  sections: [
+    { title: "A piece of chalk", start: 1 },
+    { title: "How far the chalk runs", start: 4 },
+    { title: "Carbonate of lime", start: 10 },
+    { title: "Under the microscope", start: 13 },
+    { title: "Living Globigerinae", start: 16 },
+    { title: "Mud from the deep sea", start: 21 },
+    { title: "How long the chalk took", start: 36 },
+    { title: "What the evidence is for", start: 50 },
+  ],
+};
+
 function resolveDataRoot(store) {
   const candidates = [
     store.settings.dataRoot,
@@ -341,6 +368,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const paras = Array.isArray(body.doc?.paras) ? body.doc.paras : [];
       const title = String(body.doc?.title || "");
+      if (title === "On a Piece of Chalk") return send(res, 200, { brief: CHALK_BRIEF });
       const c = await cat();
       let item = null;
       if (title) {

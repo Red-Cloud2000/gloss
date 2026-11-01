@@ -8,6 +8,7 @@ import { displayArticle, isHeading, readingMinutes, titleClass, type Article } f
 import { ARTICLE_QUESTIONS } from "@/lib/actions";
 import { SAMPLE_QUESTIONS } from "@/lib/samples";
 import { fetchBrief } from "@/lib/ask";
+import { glossDate } from "@/lib/kb-article";
 import { BRAND } from "@/lib/brand";
 import { indexArticle } from "@/lib/doc";
 import { fetchText } from "@/lib/sync";
@@ -480,6 +481,7 @@ function ReaderInner({ article }: { article: Article }) {
   const paraCount = ix.byNumber.size;
   // A short line above the title: where this came from.
   const kicker = article.source ? article.source.split(/,|\(/)[0].trim() : article.origin === "paste" ? "Pasted text" : undefined;
+  const published = glossDate(article.published);
 
   return (
     <ReaderContext.Provider value={api}>
@@ -517,7 +519,7 @@ function ReaderInner({ article }: { article: Article }) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14.5px] leading-snug text-ink">
                       {article.author ? <span className="font-medium">{article.author}</span> : <span className="font-medium">{kicker ?? "Untitled source"}</span>}
-                      {article.published && <span className="text-ink-3">{`  \u00b7  ${article.published}`}</span>}
+                      {published && <span className="text-ink-3">{`  \u00b7  ${published}`}</span>}
                     </p>
                     <p className="mt-1 text-[13px] leading-snug text-ink-3">
                       {readingMinutes(ix.words)} min read <span className="text-ink-4">{"\u00b7"}</span> {paraCount} paragraphs

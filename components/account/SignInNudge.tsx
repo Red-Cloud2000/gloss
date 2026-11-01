@@ -56,7 +56,11 @@ export function SignInNudge() {
   if (!open || isSignedIn) return null;
   return (
     <Toast onClose={() => setOpen(false)}>
-      <span>Kept in this browser. Sign in to have it on every device.</span>
+      <span>
+        {typeof window !== "undefined" && "glossDesktop" in window && (window as Window & { glossDesktop?: unknown }).glossDesktop
+          ? "Kept on this computer."
+          : "Kept in this browser. Sign in to have it on every device."}
+      </span>
       <SignInButton mode="modal">
         <button type="button" onClick={() => setOpen(false)} className="font-medium underline decoration-lens-mute underline-offset-4">
           Sign in

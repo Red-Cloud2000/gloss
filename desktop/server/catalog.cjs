@@ -64,6 +64,7 @@ function slim(it) {
     is_promotional: Boolean(it.is_promotional),
     origin: it._origin || "corpus",
     subtopic: it.subtopic || "",
+    suggested_category: it.suggested_category || "",
     core_idea: it.core_idea || "",
     core_idea_ar: it.core_idea_ar || "",
     key_points: Array.isArray(it.key_points) ? it.key_points.slice(0, 4) : [],

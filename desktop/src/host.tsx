@@ -4,7 +4,7 @@ import { Landing } from "@/components/landing/Landing";
 import { Library } from "@/components/library/Library";
 import { Reader } from "@/components/reader/Reader";
 import { Tooltips } from "@/components/ui/Tooltips";
-import { shelfItemFromSlim, type KbSlim } from "@/lib/kb-article";
+import { markCatalog, shelfItemFromSlim, type KbSlim } from "@/lib/kb-article";
 import { sampleById } from "@/lib/samples";
 import { applySettings } from "@/lib/settings";
 import { useStore, type LibraryItem } from "@/lib/store";
@@ -22,6 +22,9 @@ async function mountShelf() {
   if (!res.ok) return;
   const data = (await res.json()) as { items?: KbSlim[] };
   const incoming = (data.items || []).map(shelfItemFromSlim);
+  // The catalog is already the library. Mark it before the shelf hears about
+  // the books, so a normal launch does not play the import celebration.
+  markCatalog(incoming.map((x) => x.id));
   const ids = new Set(incoming.map((x) => x.id));
   const prev = useStore.getState().library;
   const byId = new Map(prev.map((x) => [x.id, x]));

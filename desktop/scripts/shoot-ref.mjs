@@ -25,9 +25,21 @@ await page.addInitScript(() => {
   localStorage.removeItem("gloss:v1");
 });
 
-// Landing, underline mid-draw then settled. 1280 content height 742, 1920 content 1114.
-await boot(1280, 742, "/");
-await page.waitForTimeout(80);
+// Landing. The pen underline starts 0.95s after paint and draws for 0.6s, so 31
+// has to be taken mid-draw, not after networkidle (that misses it, or lands past it).
+await page.setViewportSize({ width: 1280, height: 742 });
+await page.goto("http://127.0.0.1:5173/", { waitUntil: "commit", timeout: 30000 });
+await page.waitForSelector(".hero-mark");
+for (let i = 0; i < 50; i++) {
+  const scale = await page.evaluate(() => {
+    const t = getComputedStyle(document.querySelector(".hero-mark"), "::after").transform;
+    const m = t && t !== "none" ? t.match(/matrix\(([^)]+)\)/) : null;
+    return m ? parseFloat(m[1].split(",")[0]) : 0;
+  });
+  if (scale >= 0.4 && scale <= 0.72) break;
+  await page.waitForTimeout(30);
+}
+await page.evaluate(() => document.documentElement.classList.add("shoot"));
 await shot("31-landing-underline-drawing");
 await page.waitForTimeout(1200);
 await shot("01-landing");
@@ -53,13 +65,14 @@ await shot("04-book-hover");
 await spine.click();
 await page.waitForTimeout(120);
 await shot("05-book-opening-a");
-await page.waitForTimeout(280);
+// Cover starts at 700ms and swings for 780ms. Half-open is ~1060ms; the light page and dark spine settle at ~1500ms.
+await page.waitForTimeout(940);
 await shot("06-reader-opened");
-await page.waitForTimeout(400);
+await page.waitForTimeout(460);
 await shot("07-book-open-settled");
-await page.waitForTimeout(500);
+await page.waitForTimeout(380);
 await shot("07-book-open-settled2");
-await page.waitForTimeout(600);
+await page.waitForTimeout(400);
 await shot("08-book-open-final");
 
 await page.getByRole("button", { name: /start reading/i }).click();
@@ -150,7 +163,14 @@ await page.waitForTimeout(400);
 await shot("24-reader-focus-mode");
 await page.keyboard.press("f");
 
+// The live library shots 25-30 are Sepia, at the same 1280×742 content size.
+await page.addInitScript(() => {
+  const s = JSON.parse(localStorage.getItem("gloss:settings") || "{}");
+  s.theme = "sepia";
+  localStorage.setItem("gloss:settings", JSON.stringify(s));
+});
 await boot(1280, 742, "/library");
+await shot("29-shelf-view-fullres");
 await page.getByRole("radio", { name: "Topics" }).click();
 await page.waitForTimeout(500);
 await shot("25-library-topics-view");
@@ -159,6 +179,7 @@ await page.waitForTimeout(400);
 await shot("26-topic-detail-science");
 
 await boot(1280, 742, "/library");
+await page.evaluate(() => document.documentElement.classList.add("shoot"));
 await page.getByRole("button", { name: /add articles/i }).click();
 await page.waitForTimeout(300);
 await shot("27-add-articles-connect-agent");

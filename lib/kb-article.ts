@@ -6,7 +6,7 @@
  */
 
 import type { Article, Block, BriefData } from "./article";
-import { TOPICS, type TopicKey } from "./library";
+import type { TopicKey } from "./library";
 import { useStore, type LibraryItem } from "./store";
 
 export type KbSlim = {
@@ -31,8 +31,53 @@ export type KbSlim = {
   _origin?: string;
   subtopic?: string;
   language?: string;
+  suggested_category?: string;
   source_meta?: { avatar?: string | null; local_video?: string | null };
 };
+
+/**
+ * Ids placed by opening the catalog. They are already in the library, so the
+ * shelf must not treat them as a fresh import (no outline, no confetti).
+ * A link the reader adds later is not in this set, and still arrives once.
+ */
+const catalogIds = new Set<string>();
+export function markCatalog(ids: Iterable<string>) {
+  for (const id of ids) catalogIds.add(id);
+}
+export function isCatalogId(id: string) {
+  return catalogIds.has(id);
+}
+
+/**
+ * A date the way Gloss prints one: a year, or "24 Sep 2026".
+ * A clock time is when the link was fetched, never the post, so it is dropped
+ * unless `post` says the calendar day belongs to the post itself.
+ */
+export function glossDate(raw?: string | null, opts?: { post?: boolean }): string | undefined {
+  const s = (raw || "").trim();
+  if (!s) return undefined;
+  if (/^\d{4}$/.test(s)) return s;
+  if (/^\d{1,2} [A-Z][a-z]{2} \d{4}$/.test(s)) return s;
+  const day = s.match(/^(\d{4}-\d{2}-\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2})?)?$/);
+  if (day) {
+    if (/[T ]\d{2}:\d{2}/.test(s) && !opts?.post) return undefined;
+    return shortDay(day[1]);
+  }
+  const packed = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (packed) return shortDay(`${packed[1]}-${packed[2]}-${packed[3]}`);
+  if (/\bago\b/i.test(s)) return s;
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime()) && /[A-Za-z]{3}/.test(s)) {
+    return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  }
+  return undefined;
+}
+
+function shortDay(iso: string): string | undefined {
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
 
 export type KbRaw = {
   post_text?: string;
@@ -57,14 +102,51 @@ const PLATFORM_TOPIC: Record<string, TopicKey> = {
   article: "writing",
 };
 
+/** Subject words, strongest shelf first. Short tokens stay bounded so "ai" inside a word does not count. */
+const SUBJECT: [TopicKey, string[]][] = [
+  ["security", ["security", "privacy", "cryptography", "cyber"]],
+  ["infra", ["devops", "kubernetes", "docker", "cloud", "gpu", "ci/cd", "sre"]],
+  ["design", ["design", "typography", "ux", "figma", "interface"]],
+  ["data", ["data science", "analytics", "statistics", "dataset", "visualisation", "visualization", "sql"]],
+  ["writing", ["writing", "journalism", "storytelling", "copywriting", "prompt"]],
+  ["work", ["career", "hiring", "leadership", "resume", "interview", "job"]],
+  ["money", ["investing", "finance", "crypto"]],
+  ["science", ["physics", "biology", "chemistry", "astronomy"]],
+  ["health", ["health", "medicine", "fitness", "nutrition"]],
+  ["learning", ["education", "tutorial", "teaching", "course"]],
+  ["programming", ["programming", "typescript", "javascript", "python", "react", "github", "plc", "developer", "software", "testing", "qa", "playwright", "coding", "web development"]],
+  ["ai", ["machine learning", "language model", "llm", "claude", "chatgpt", "gpt", "agent", "ollama", "anthropic", "openai", "gemini", "rag", " ai ", "ai-"]],
+];
+
+const SOCIAL = new Set(["linkedin", "facebook", "instagram", "x", "twitter", "tiktok", "youtube"]);
+
+function subjectTopic(it: KbSlim): TopicKey | null {
+  const blob = ` ${[it.suggested_category, it.subtopic, ...(it.tags || []), it.core_idea, it.core_idea_ar, it.title].filter(Boolean).join(" ").toLowerCase()} `;
+  let best: TopicKey | null = null;
+  let score = 0;
+  for (const [key, words] of SUBJECT) {
+    let n = 0;
+    for (const w of words) if (blob.includes(w)) n += 1;
+    if (n > score) {
+      score = n;
+      best = key;
+    }
+  }
+  return best;
+}
+
 export function topicFor(it: KbSlim): TopicKey {
   const plat = (it.platform || "").toLowerCase();
-  if (PLATFORM_TOPIC[plat]) return PLATFORM_TOPIC[plat];
-  const blob = `${it.subtopic || ""} ${(it.tags || []).join(" ")}`.toLowerCase();
-  for (const t of TOPICS) {
-    if (t.key === "unsorted") continue;
-    if (blob.includes(t.name.toLowerCase())) return t.key;
+  const subject = subjectTopic(it);
+  // A social post keeps its platform cloth (brown, magenta, teal) unless a
+  // specific subject is clearer. AI and programming would paint the whole
+  // corpus one blue, so they do not override a social shelf.
+  if (SOCIAL.has(plat) && PLATFORM_TOPIC[plat]) {
+    if (subject && subject !== "ai" && subject !== "programming" && subject !== "tech") return subject;
+    return PLATFORM_TOPIC[plat];
   }
+  if (subject) return subject;
+  if (PLATFORM_TOPIC[plat]) return PLATFORM_TOPIC[plat];
   return "unsorted";
 }
 
@@ -131,7 +213,7 @@ export function articleFromKb(item: unknown, raw: unknown): Article | null {
     id: it.id,
     title,
     author: it.author || undefined,
-    published: it.post_date || it.date_saved || undefined,
+    published: glossDate(it.post_date, { post: true }),
     dek: it.one_line || it.one_line_en || undefined,
     source: it.platform || undefined,
     sourceUrl: it.original_url,
@@ -163,13 +245,17 @@ export function briefFromKb(item: unknown): BriefData | null {
   const it = item as KbSlim;
   const gist = (it.detailed_summary || it.one_line || "").trim();
   if (!gist) return null;
-  const claims = (it.key_points || []).filter(Boolean).slice(0, 6).map((text, i) => ({ text, cite: i + 1 }));
-  return {
-    gist,
-    claims,
-    caveats: [],
-    sections: [{ title: "Summary", start: 1 }],
-  };
+  const claims = (it.key_points || []).filter(Boolean).slice(0, 6).map((text) => ({ text }));
+  const sections = claims.length
+    ? claims.map((c, i) => ({ title: mapTitle(c.text), start: i + 1 }))
+    : [{ title: "Summary", start: 1 }];
+  return { gist, claims, caveats: [], sections };
+}
+
+function mapTitle(text: string): string {
+  const sentence = text.split(/[.!?؟۔]/)[0]?.trim() || text;
+  const t = sentence.replace(/\s+/g, " ");
+  return t.length > 52 ? `${t.slice(0, 51).trim()}…` : t;
 }
 
 /** One corpus row, as a book on the real shelf. */
