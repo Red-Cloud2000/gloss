@@ -78,6 +78,11 @@ async function stream(ix: DocIndex, glossId: string, modelKey: ModelKey) {
       update((t) => ({ ...t, streaming: false, error, needKey }));
       return;
     }
+    if ((res.headers.get("content-type") || "").includes("application/json")) {
+      const j = (await res.json()) as { reply?: string; error?: string };
+      update((t) => ({ ...t, content: j.reply || "", streaming: false, error: j.reply ? undefined : j.error || "Could not answer." }));
+      return;
+    }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = "";

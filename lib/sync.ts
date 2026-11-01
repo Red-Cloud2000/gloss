@@ -234,9 +234,26 @@ export function startSync(userId: string) {
 export async function fetchText(id: string): Promise<Article | null> {
   try {
     const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
+    if (res.ok) {
+      const { doc } = (await res.json()) as { doc: Article };
+      await saveDoc(doc);
+      return doc;
+    }
+  } catch {
+    /* The desktop app keeps texts under /api/items. */
+  }
+  try {
+    const res = await fetch(`/api/items/${encodeURIComponent(id)}`);
     if (!res.ok) return null;
-    const { doc } = (await res.json()) as { doc: Article };
+    const body = (await res.json()) as { item?: unknown; raw?: unknown };
+    const { articleFromKb, briefFromKb } = await import("./kb-article");
+    const doc = articleFromKb(body.item, body.raw);
+    if (!doc) return null;
     await saveDoc(doc);
+    const brief = briefFromKb(body.item);
+    if (brief && !useStore.getState().briefs[doc.id]) {
+      useStore.getState().setBrief(doc.id, { status: "ready", data: brief, at: Date.now() });
+    }
     return doc;
   } catch {
     return null;

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gloss</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      try {
+        var s = JSON.parse(localStorage.getItem("gloss:settings") || "{}");
+        var e = document.documentElement;
+        var t = s.theme || "auto";
+        if (t === "auto") t = matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "paper";
+        e.dataset.theme = t;
+        e.dataset.pen = s.pen || "vermilion";
+        e.dataset.face = s.face || "serif";
+        e.dataset.align = s.align || "left";
+        e.dataset.paras = s.paras || "spaced";
+        if (s.size) e.style.setProperty("--read-size", s.size + "px");
+        var L = { tight: 1.5, normal: 1.64, loose: 1.82 }, M = { narrow: 28, normal: 32, wide: 37 };
+        if (s.leading) e.style.setProperty("--leading", L[s.leading]);
+        if (s.width) e.style.setProperty("--measure-k", M[s.width]);
+      } catch (x) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

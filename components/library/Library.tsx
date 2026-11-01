@@ -6,6 +6,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState, Vie
 import { ChevronLeft, ChevronRight, LayoutGrid, Library as LibraryIcon, Search, X } from "lucide-react";
 import { TopBar } from "@/components/ui/TopBar";
 import { readingMinutes, tidyTitle, wordCount } from "@/lib/article";
+import { isCatalogId } from "@/lib/kb-article";
 import { forgetCover, paintAll } from "@/lib/covers";
 import { SAMPLE_SHELF } from "@/lib/classics";
 import { SORTS, sortBooks, TAGS, TOPIC, TOPICS, topicOf, type Book, type Sort, type TagKey, type Topic, type TopicKey } from "@/lib/library";
@@ -100,7 +101,7 @@ export function Library() {
       known.current = ids;
       return;
     }
-    const added = [...ids].filter((id) => !known.current!.has(id));
+    const added = [...ids].filter((id) => !known.current!.has(id) && !isCatalogId(id));
     known.current = ids;
     if (!added.length) return;
     setFresh((f) => new Set([...f, ...added]));

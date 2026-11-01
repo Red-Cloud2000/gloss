@@ -36,6 +36,10 @@ export type Article = {
   image?: string;
   /** Where it came from: the bundled shelf, a link, pasted text, or a file. */
   origin?: "sample" | "url" | "paste" | "file";
+  /** A social post's profile picture. */
+  avatar?: string;
+  /** Topic already known (the desktop corpus). Skips a sorting request. */
+  topic?: string;
   /** PDF pages that looked hard (columns, tables, maths) and wait to be read again by a vision model (lib/upgrade.ts). */
   upgrade?: number[];
   addedAt?: number;
