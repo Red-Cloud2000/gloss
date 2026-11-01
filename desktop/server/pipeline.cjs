@@ -212,6 +212,20 @@ async function copyFrames(b, mediaDir) {
       /* a picture is optional */
     }
   }
+  if (b.avatar_url) {
+    try {
+      const res = await fetch(b.avatar_url, { headers: { "User-Agent": "Mozilla/5.0" } });
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length > 400 && buf.length < 4_000_000) {
+          await fsp.writeFile(path.join(mediaDir, "avatar.jpg"), buf);
+          b._avatarRel = path.posix.join("kb", "media", path.basename(mediaDir), "avatar.jpg");
+        }
+      }
+    } catch {
+      /* avatar is optional */
+    }
+  }
   return rels;
 }
 
@@ -360,6 +374,7 @@ function buildRecords({ id, b, gen, frameRels, thumbRel, llm }) {
       images_sent: Math.min(8, frameRels.length),
       warnings: b.warnings || [],
       local_video: b.media.find((m) => m.kind === "video" && m.path) ? `kb/media/${id}/video.mp4` : null,
+      avatar: b._avatarRel || null,
     },
     raw_file: `kb/raw/${id}.json`,
     media_dir: mediaDir,
@@ -426,9 +441,9 @@ async function importUrl(rawUrl, ctx) {
       err.code = "skipped";
       throw err;
     }
-    const reason = e.needs_login ? "needs login / private" : /network|abort|timeout/i.test(String(e.message)) ? "network error" : e.message === "no content extracted" ? "no content extracted" : "other fetch error";
+    const reason = e.captcha ? "captcha" : e.needs_login ? "needs login / private" : /network|abort|timeout/i.test(String(e.message)) ? "network error" : e.message === "no content extracted" ? "no content extracted" : "other fetch error";
     await writeFailed(ctx.addedRoot, id, original, platform, reason, e.message, e.needs_login);
-    const err = new Error(e.needs_login ? "That post needs a logged-in Facebook or Instagram session. Open login in Settings, then try again." : e.message || "Could not fetch that link.");
+    const err = new Error(e.message || (e.needs_login ? "That post needs a logged-in session. Open login in Settings, then try again." : "Could not fetch that link."));
     err.needs_login = Boolean(e.needs_login);
     err.platform = platform;
     throw err;
@@ -523,4 +538,4 @@ async function importText(text, title, ctx) {
   return item;
 }
 
-module.exports = { importUrl, importText, QWEN, SCHEMA };
+module.exports = { importUrl, importText, summarize, QWEN, SCHEMA };

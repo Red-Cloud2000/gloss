@@ -31,6 +31,9 @@ export function Library() {
     });
     rows = [...rows].sort((a, b) => {
       if (sort === "rate") return (b.value_rating || 0) - (a.value_rating || 0);
+      const ao = a.origin === "added" ? 1 : 0;
+      const bo = b.origin === "added" ? 1 : 0;
+      if (ao !== bo) return ao - bo;
       const cmp = String(a.date_saved).localeCompare(String(b.date_saved));
       return sort === "old" ? cmp : -cmp;
     });

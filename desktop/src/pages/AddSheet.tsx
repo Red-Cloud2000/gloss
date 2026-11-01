@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link2 } from "lucide-react";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { useKB } from "../kb";
@@ -90,8 +91,9 @@ export function AddSheet() {
         {mode === "link" ? (
           <form onSubmit={(e) => void submitLink(e)}>
             <div className="import-bar">
-              <input dir="ltr" value={busy ? `${busy}` : url} disabled={!!busy} onChange={(e) => setUrl(e.target.value)} placeholder={t("linkPh")} aria-label={t("linkPh")} inputMode="url" autoFocus />
-              <button className="btn-ink" type="submit" disabled={!!busy || !url.trim()}>{t("keep")}</button>
+              <Link2 size={18} aria-hidden />
+              <input dir="ltr" value={busy ? `${busy}` : url} disabled={!!busy} onChange={(e) => setUrl(e.target.value)} placeholder={t("linkPh")} aria-label={t("linkPh")} inputMode="url" autoComplete="off" spellCheck={false} autoFocus />
+              <button className="btn-ink" type="submit" disabled={!!busy || !url.trim()}>{t("readLink")}</button>
               {busy && <span className="import-progress" style={{ transform: `scaleX(${Math.max(0.05, pct)})` }} />}
             </div>
           </form>

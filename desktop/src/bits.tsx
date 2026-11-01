@@ -3,15 +3,12 @@ import { GlossMark } from "./mark";
 import { displayTitle, mediaSrc, oneLine } from "./text";
 import type { Lang, Slim } from "./types";
 
-/** Exact label. Spans are pinned left-to-right so «الـPrompts» stays in that order. */
+/** The Arabic prefix stays attached to Prompts and is shaped as Arabic. */
 export function PromptsWord() {
   return (
-    <span className="prompts-word" dir="ltr" lang="ar">
-      <span>«</span>
-      <span dir="rtl" lang="ar">الـ</span>
-      <span dir="ltr" lang="en">Prompts</span>
-      <span>»</span>
-    </span>
+    <bdi dir="rtl" lang="ar" className="prompts-word">
+      الـPrompts
+    </bdi>
   );
 }
 

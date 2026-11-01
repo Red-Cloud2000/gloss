@@ -30,7 +30,7 @@ export function Ideas() {
         {testing.slice(0, 24).map((it) => (
           <button key={it.id} type="button" className="gcard" onClick={() => go({ page: "note", noteId: it.id })}>
             <span className="gcard-body">
-              <span className="kicker">{it.testing_relevance?.score}/3 · {it.platform}</span>
+              <span className="kicker"><bdi dir="ltr">{it.testing_relevance?.score}/3</bdi> · {it.platform}</span>
               <h3 className="gcard-title" dir="auto">{displayTitle(it, lang)}</h3>
               <p className="gcard-line" dir="auto">{it.testing_relevance?.why || " "}</p>
             </span>
@@ -102,6 +102,7 @@ export function Duplicates() {
 const REASONS: Record<string, [string, string]> = {
   "dead/deleted link": ["رابط محذوف", "Dead or deleted"],
   "needs login / private": ["يحتاج تسجيل دخول", "Needs login"],
+  captcha: ["تحقق بشري من الموقع", "The site asked for a captcha"],
   "network error": ["خطأ في الشبكة", "Network error"],
   "no content extracted": ["لم يُستخرج محتوى", "No content extracted"],
   "http error": ["خطأ HTTP", "HTTP error"],

@@ -112,7 +112,7 @@ export function Shell() {
             const Icon = item.icon;
             const on = section === item.id;
             return (
-              <button key={item.id} type="button" data-page={item.id} className={on ? "nav-btn is-on" : "nav-btn"} aria-current={on ? "page" : undefined} title={collapsed ? (item.prompts ? "«الـPrompts»" : t(item.label)) : undefined} onClick={() => go({ page: item.id } as Route)}>
+              <button key={item.id} type="button" data-page={item.id} className={on ? "nav-btn is-on" : "nav-btn"} aria-current={on ? "page" : undefined} title={collapsed ? (item.prompts ? "الـPrompts" : t(item.label)) : undefined} onClick={() => go({ page: item.id } as Route)}>
                 <Icon size={18} />
                 {!collapsed && <span>{item.prompts ? <PromptsWord /> : t(item.label)}</span>}
               </button>

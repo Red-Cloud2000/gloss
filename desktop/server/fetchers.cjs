@@ -127,6 +127,52 @@ async function saveRemote(url, dest, maxBytes) {
   return dest;
 }
 
+const CHROME_LINE = /^(jump to content|main menu|navigation menu|search|donate|create account|log in|sign up|contents|appearance|tools|from wikipedia, the free encyclopedia|personal tools|namespaces|views|more|toggle [a-z].* subsection)$/i;
+
+/** Readability's article, as separate paragraphs and headings. Site chrome is left out. */
+const SKIP_CHROME = "nav, footer, aside, [role='navigation'], .interlanguage-link, .vector-menu, .vector-menu-content, .mw-portlet, .navbox, .vertical-navbox, .mw-references, .reflist, .reference, .mw-editsection, .toc, #toc, .sidebar, .infobox, .sistersitebox, .metadata, .mw-jump-link, .noprint, .shortdescription";
+
+function blocksFromArticle(root) {
+  if (!root) return "";
+  const lines = [];
+  const nodes = root.querySelectorAll("h1,h2,h3,h4,p,li,blockquote,pre");
+  let shortRun = [];
+  const flushShort = () => {
+    if (shortRun.length < 12) lines.push(...shortRun);
+    shortRun = [];
+  };
+  for (const n of nodes) {
+    if (n.closest && n.closest(SKIP_CHROME)) continue;
+    if (n.querySelector && n.querySelector("li, p") && (n.tagName || "").toLowerCase() === "li") continue;
+    const t = decodeEntities((n.textContent || "").replace(/\s+/g, " ").trim());
+    if (!t || t.length < 2 || CHROME_LINE.test(t)) continue;
+    if (/^toggle /i.test(t) || /^\[\d+\]$/.test(t)) continue;
+    const tag = (n.tagName || "").toLowerCase();
+    let line = t;
+    if (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4") line = `## ${t}`;
+    else if (tag === "li") line = `- ${t}`;
+    if (tag === "li" && t.length < 42 && !/[.!?؟]/.test(t)) {
+      shortRun.push(line);
+      continue;
+    }
+    flushShort();
+    lines.push(line);
+  }
+  flushShort();
+  return lines.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function contentRootText(html) {
+  let document;
+  try {
+    ({ document } = parseHTML(html));
+  } catch {
+    return "";
+  }
+  const root = document.querySelector("article, main, #mw-content-text, #content, [role='main']") || document.body;
+  return blocksFromArticle(root);
+}
+
 function articleFromHtml(html, url) {
   let document;
   try {
@@ -141,22 +187,32 @@ function articleFromHtml(html, url) {
   let author = metaContent(document, 'meta[name="author"]') || metaContent(document, 'meta[property="article:author"]');
   let text = "";
   try {
-    const parsed = new Readability(document).parse();
+    const parsed = new Readability(document, { charThreshold: 80 }).parse();
     if (parsed) {
-      title = title || decodeEntities(parsed.title || "");
-      author = author || decodeEntities(parsed.byline || "");
+      title = decodeEntities(parsed.title || "") || title;
+      author = author || decodeEntities(parsed.byline || "").replace(/^by\s+/i, "");
       const { document: clean } = parseHTML(`<body>${parsed.content || ""}</body>`);
-      text = (clean.body?.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+      text = blocksFromArticle(clean.body);
     }
   } catch {
     /* readability is best-effort */
   }
-  if (text.length < 80 && ogDesc) text = ogDesc;
+  if (text.length < 80) {
+    const alt = contentRootText(html);
+    if (alt.length > text.length && !isChromeDump(alt)) text = alt;
+  }
+  if (text.length < 80 && ogDesc && !isChromeDump(ogDesc)) text = ogDesc;
   if (!title) {
     const t = document.querySelector("title");
     title = decodeEntities(t?.textContent || "");
   }
+  if (isChromeDump(text)) text = "";
   return { title: title.slice(0, 300), author: author.slice(0, 160), text: text.slice(0, 120000), image };
+}
+
+function isChromeDump(text) {
+  const head = String(text || "").slice(0, 900);
+  return /jump to content/i.test(head) && /main menu/i.test(head);
 }
 
 function parseVtt(vtt) {
@@ -275,9 +331,90 @@ async function youtubeCaptionsYtDlp(vid, workdir) {
   };
 }
 
+const JUNK_TITLE = /^(error|instagram|facebook|linkedin|log ?in|login|sign up|sign in|checking your browser.*|recaptcha.*|just a moment.*)$/i;
+
 function looksLikeWall(text) {
-  const blob = String(text || "").slice(0, 5000);
-  return /recaptcha|checking your browser|verify you are human|sign in to confirm you.?re not a bot|log into instagram|see everyday moments from your close friends/i.test(blob);
+  const blob = String(text || "").slice(0, 1800);
+  return /checking your browser|verify you are human|sign in to confirm you.?re not a bot|log into instagram|see everyday moments from your close friends|agree & join linkedin|join linkedin now|sign in to view more content/i.test(blob);
+}
+
+/** A captcha, login wall, or error page must never become a note. Returns a reason, or "". */
+function isUnreadableCapture(b) {
+  const title = String(b?.title || "").trim();
+  const text = String(b?.text || "").trim();
+  const blob = `${title}\n${text}`.slice(0, 2500);
+  if (/checking your browser/i.test(title) || /^recaptcha/i.test(title)) return "captcha";
+  if (looksLikeWall(blob)) return "login wall";
+  if (JUNK_TITLE.test(title) && text.length < 1500) return "error page";
+  if (isChromeDump(text)) return "page chrome";
+  if (/log in/i.test(text.slice(0, 240)) && /followers/i.test(text.slice(0, 500))) return "login wall";
+  return "";
+}
+
+function linkedinEmbedUrl(url) {
+  const m = String(url || "").match(/(ugcPost|share|activity)-(\d{8,})/i);
+  if (!m) return "";
+  const kind = /^ugcpost$/i.test(m[1]) ? "ugcPost" : /^activity$/i.test(m[1]) ? "activity" : "share";
+  return `https://www.linkedin.com/embed/feed/update/urn:li:${kind}:${m[2]}`;
+}
+
+/** Public LinkedIn embed: author, avatar, post text, and the post's own images. */
+function parseLinkedInEmbed(html) {
+  let document;
+  try {
+    ({ document } = parseHTML(html));
+  } catch {
+    return null;
+  }
+  const og = (sel) => decodeEntities(metaContent(document, sel));
+  const desc = og('meta[property="og:description"]') || og('meta[name="description"]');
+  const ogTitle = og('meta[property="og:title"]');
+  if (/checking your browser/i.test(ogTitle) || (!desc && /recaptcha\/challengepage/i.test(html))) return null;
+  let author = "";
+  const parts = ogTitle.split("|");
+  if (parts.length > 1) author = parts[parts.length - 1].trim();
+  const lock = document.querySelector('[aria-label^="View profile for"]');
+  if (lock) {
+    const name = (lock.getAttribute("aria-label") || "").replace(/^View profile for\s+/i, "").trim();
+    if (name) author = name;
+  }
+  const avatarEl = document.querySelector("[data-delayed-url*='profile-displayphoto'], [data-delayed-url*='profile-displayphoto-shrink']")
+    || document.querySelector("[data-delayed-url]");
+  let avatar = avatarEl ? decodeEntities(avatarEl.getAttribute("data-delayed-url") || "") : "";
+  if (avatar && !/profile-displayphoto/i.test(avatar)) avatar = "";
+  const images = [];
+  const seen = new Set();
+  const pushImg = (src) => {
+    src = decodeEntities(src || "");
+    if (!/media\.licdn\.com\/dms\/image/i.test(src)) return;
+    if (/profile-displayphoto|company-logo|ghost-icon/i.test(src)) return;
+    const id = (src.match(/\/dms\/image\/(?:v2\/)?([^/?]+)/) || [])[1] || src;
+    if (seen.has(id)) return;
+    seen.add(id);
+    images.push(src);
+  };
+  for (const img of document.querySelectorAll("img")) pushImg(img.getAttribute("data-delayed-url") || img.getAttribute("src") || "");
+  pushImg(og('meta[property="og:image"]'));
+  const text = (desc || "").trim();
+  const title = (text.split("\n").map((s) => s.trim()).find(Boolean) || ogTitle || "").slice(0, 180);
+  return { title, author, text, avatar, images };
+}
+
+async function ytdlpMeta(url) {
+  const bin = which("yt-dlp");
+  if (!bin) return null;
+  const r = await run(bin, ["--skip-download", "--no-playlist", "--no-warnings", "--print", "%(title)s", "--print", "%(uploader)s", "--print", "%(description)s", url], { timeout: 70000 });
+  const text = r.stdout.toString("utf8").replace(/\u0000/g, "").trim();
+  if (!text) return null;
+  const lines = text.split(/\r?\n/);
+  let title = (lines[0] || "").trim();
+  const author = (lines[1] || "").trim();
+  let body = lines.slice(2).join("\n").trim();
+  if (/^\d[\d.,]*\s*[KMB]?\s*views\b/i.test(title) && body) title = body.split("\n").map((s) => s.trim()).find(Boolean) || title;
+  title = title.replace(/\s+/g, " ").slice(0, 180);
+  if (/^(error|facebook|instagram|log in)$/i.test(title)) title = "";
+  if (!title && !body) return null;
+  return { title, author, text: body.slice(0, 20000) };
 }
 
 async function ytdlpDownload(url, workdir, capMb) {
@@ -394,10 +531,11 @@ async function fetchYoutube(url, b, workdir, opts) {
       } else b.warnings.push("no captions and transcription failed");
     } else if (!caps) b.warnings.push("no captions; add a Groq key in Settings to transcribe");
   } else if (dl.warning) b.warnings.push(dl.warning);
-  if (!b.text || looksLikeWall(b.text)) {
+  if (!b.text || looksLikeWall(b.text) || isChromeDump(b.text) || /skip navigation/i.test(b.text.slice(0, 800))) {
     const extra = await jinaText(b.resolved_url);
-    if (extra && !looksLikeWall(extra)) b.text = extra.slice(0, 20000);
-    else if (looksLikeWall(b.text)) b.text = "";
+    const chrome = !extra || looksLikeWall(extra) || isChromeDump(extra) || /skip navigation/i.test(extra.slice(0, 800));
+    if (!chrome) b.text = extra.slice(0, 20000);
+    else b.text = "";
   }
 }
 
@@ -426,6 +564,43 @@ async function fetchGithub(url, b) {
   b.content_kind = "text";
 }
 
+async function fetchLinkedIn(url, b) {
+  let final = url;
+  if (/lnkd\.in/i.test(url)) {
+    try {
+      const hop = await getText(url, { timeout: 20000 });
+      final = hop.finalUrl || url;
+    } catch {
+      /* keep the short link */
+    }
+  }
+  if (!/^https?:\/\/www\.linkedin\.com/i.test(final)) final = final.replace("://linkedin.com", "://www.linkedin.com");
+  const embed = linkedinEmbedUrl(final) || linkedinEmbedUrl(url);
+  let html = "";
+  if (embed) {
+    try {
+      const page = await getText(embed, { timeout: 20000 });
+      html = page.text || "";
+    } catch {
+      html = "";
+    }
+  }
+  b.resolved_url = final;
+  const parsed = html ? parseLinkedInEmbed(html) : null;
+  if (!parsed || (!parsed.text && !parsed.images.length)) {
+    const err = new Error("That LinkedIn post needs a logged-in session, or the site answered with a captcha. Open login in Settings, then try again.");
+    err.needs_login = true;
+    throw err;
+  }
+  b.title = parsed.title;
+  b.author = parsed.author;
+  b.text = parsed.text;
+  b.avatar_url = parsed.avatar || "";
+  b.thumbnail_url = parsed.images[0] || "";
+  for (const src of parsed.images) b.media.push({ kind: "image", url: src });
+  b.content_kind = parsed.images.length > 1 ? "media" : "text";
+}
+
 async function fetchTwitter(url, b) {
   const m = url.match(/status\/(\d+)/);
   if (m) {
@@ -436,21 +611,25 @@ async function fetchTwitter(url, b) {
         const tw = j.tweet || j;
         b.text = tw.text || tw.description || "";
         b.author = tw.author?.name ? `${tw.author.name} (@${tw.author.screen_name || ""})` : "";
-        b.title = b.text.split("\n")[0].slice(0, 140);
-        const photos = tw.media?.photos || tw.media?.all || [];
+        b.avatar_url = tw.author?.avatar_url || tw.author?.avatar || "";
+        b.title = (b.text.split("\n")[0] || b.author || "Post").slice(0, 140);
+        const photos = tw.media?.photos || [];
         for (const p of photos) {
           const u = p.url || p;
-          if (typeof u === "string") b.media.push({ kind: "image", url: u });
+          if (typeof u === "string" && /^https?:/i.test(u) && !/\.mp4(\?|$)/i.test(u)) b.media.push({ kind: "image", url: u });
         }
-        if (tw.media?.videos?.[0]?.url) b.media.push({ kind: "video_url", url: tw.media.videos[0].url });
-        return;
+        for (const v of tw.media?.videos || []) {
+          if (v.thumbnail_url) b.media.push({ kind: "image", url: v.thumbnail_url });
+        }
+        if (b.media[0]?.url) b.thumbnail_url = b.media[0].url;
+        if (b.text || b.media.length) return;
       }
     } catch {
       /* fall through */
     }
   }
   const extra = await jinaText(url);
-  if (extra) b.text = extra;
+  if (extra && !isChromeDump(extra) && !looksLikeWall(extra)) b.text = extra;
 }
 
 async function fetchSocialPage(url, b, opts) {
@@ -463,33 +642,41 @@ async function fetchSocialPage(url, b, opts) {
     html = "";
   }
   const loginWall = /login|log in|sign up|تسجيل الدخول/i.test(html.slice(0, 2500)) && html.length < 80000 && !/og:description/i.test(html);
-  if (html) {
+  if (html && !/checking your browser/i.test(html.slice(0, 400))) {
     const art = articleFromHtml(html, b.resolved_url);
     b.title = art.title;
     b.author = art.author;
     b.text = art.text;
-    if (art.image) {
+    if (art.image && !/static\.licdn\.com|fbcdn.*rsrc/i.test(art.image)) {
       b.thumbnail_url = art.image;
       b.media.push({ kind: "image", url: art.image });
     }
   }
-  if (b.text.length < 40) {
+  if (b.text.length < 40 && b.platform !== "facebook" && b.platform !== "instagram") {
     const extra = await jinaText(url);
-    if (extra) b.text = extra;
+    if (extra && !isUnreadableCapture({ title: b.title, text: extra })) b.text = extra;
   }
-  if (/^(error|instagram|facebook|log in|login)$/i.test(b.title || "")) {
-    const line = b.text.split("\n").map((s) => s.trim()).find((s) => s.length > 2 && s.length < 90 && !/log in|password|forgot|sign up|create new account|followers|following|^posts$|^about$|^reels$|^photos$/i.test(s));
-    if (line) b.title = line.slice(0, 140);
-  }
-  if (b.text.length < 40 && (b.platform === "facebook" || b.platform === "instagram")) {
-    b.needs_login = true;
-    b.warnings.push(loginWall ? "needs a logged-in session" : "facebook/instagram returned no public text");
+  const htmlWhy = isUnreadableCapture(b);
+  const thin = b.text.length < 40 && (b.platform === "facebook" || b.platform === "instagram");
+  if (htmlWhy || thin) {
+    b.text = "";
+    b.title = "";
+    b.author = "";
+    b.thumbnail_url = "";
+    b.media = b.media.filter((m) => m.kind === "video" && m.path);
   }
   if (opts.downloadVideo && (b.platform === "facebook" || b.platform === "instagram" || b.platform === "tiktok")) {
+    const meta = htmlWhy || thin ? await ytdlpMeta(url) : null;
+    if (meta && !isUnreadableCapture(meta)) {
+      b.title = meta.title || b.title;
+      b.author = meta.author || b.author;
+      b.text = meta.text || b.text;
+    }
     const dl = await ytdlpDownload(url, opts.workdir, opts.videoCapMb);
     if (dl.file) {
       b.media.push({ kind: "video", path: dl.file });
       b._frames = await ffmpegFrames(dl.file, opts.workdir, null);
+      if (!b.thumbnail_url && b._frames?.[0]) b.thumbnail_url = "";
       if (opts.groqKey && !b.transcripts.length) {
         const tr = await groqTranscribe(dl.file, opts.workdir, opts.groqKey);
         if (tr) {
@@ -498,6 +685,17 @@ async function fetchSocialPage(url, b, opts) {
         }
       }
     } else if (dl.warning) b.warnings.push(dl.warning);
+  }
+  const why = isUnreadableCapture(b);
+  const noPost = b.text.length < 40 && (b.platform === "facebook" || b.platform === "instagram") && !b.media.some((m) => m.kind === "video" && m.path);
+  if (why || noPost) {
+    b.needs_login = true;
+    b.text = "";
+    b.title = "";
+    b.thumbnail_url = "";
+    b.media = [];
+    b._frames = [];
+    b.warnings.push(why || (loginWall ? "needs a logged-in session" : "no public post text"));
   }
 }
 
@@ -548,9 +746,13 @@ async function fetchWeb(url, b) {
       b.media.push({ kind: "image", url: art.image });
     }
   }
-  if (b.text.length < 80) {
+  if (b.text.length < 80 || isChromeDump(b.text)) {
     const extra = await jinaText(finalUrl);
-    if (extra && extra.length > b.text.length) b.text = extra;
+    if (extra && !isChromeDump(extra) && !isUnreadableCapture({ title: b.title, text: extra }) && extra.length > b.text.length) b.text = extra;
+  }
+  if (isChromeDump(b.text) || isUnreadableCapture(b)) {
+    b.text = "";
+    if (JUNK_TITLE.test(b.title || "")) b.title = "";
   }
 }
 
@@ -578,22 +780,29 @@ async function fetchLink(rawUrl, opts) {
   else if (platform === "facebook" || platform === "instagram" || platform === "tiktok" || platform === "threads") {
     await fetchSocialPage(normalized, b, { ...opts, downloadVideo: true });
   } else if (platform === "linkedin") {
-    await fetchSocialPage(normalized, b, { ...opts, downloadVideo: true });
-    if (b.text.length < 40) b.warnings.push("linkedin returned little public text");
+    await fetchLinkedIn(normalized, b);
   } else {
     await fetchWeb(normalized, b);
     if (b._isPdf) await fetchPdf(b.resolved_url, b, opts.workdir, opts.videoCapMb);
   }
 
-  if (looksLikeWall(`${b.title}\n${b.text}`)) {
-    const err = new Error("needs login / private");
-    err.needs_login = true;
+  const unread = isUnreadableCapture(b);
+  if (unread) {
+    const err = new Error(
+      unread === "captcha"
+        ? "The site answered with a captcha, so the link was not saved."
+        : unread === "page chrome"
+          ? "That page did not yield an article, so it was not saved."
+          : "That post needs a logged-in session. Open login in Settings, then try again."
+    );
+    err.needs_login = unread === "login wall";
+    err.captcha = unread === "captcha";
     throw err;
   }
 
-  if (!b.text && !b.transcripts.length && !b.media.length && !b.title) {
-    const err = new Error(b.needs_login ? "needs login / private" : "no content extracted");
-    err.needs_login = b.needs_login;
+  if (b.needs_login || (!b.text && !b.transcripts.length && !b.media.length && !b.title)) {
+    const err = new Error(b.needs_login ? "That post needs a logged-in session. Open login in Settings, then try again." : "no content extracted");
+    err.needs_login = Boolean(b.needs_login);
     err.bundle = b;
     throw err;
   }
@@ -601,4 +810,4 @@ async function fetchLink(rawUrl, opts) {
   return b;
 }
 
-module.exports = { fetchLink, which, articleFromHtml, parseVtt };
+module.exports = { fetchLink, which, articleFromHtml, parseVtt, parseLinkedInEmbed, isUnreadableCapture, isChromeDump, linkedinEmbedUrl };

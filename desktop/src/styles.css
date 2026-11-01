@@ -773,6 +773,17 @@ a {
 .note-by {
   margin: 0;
   color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-sunk);
+  flex: 0 0 auto;
 }
 .origin-row {
   display: flex;
@@ -855,7 +866,7 @@ a {
   min-width: 0;
   font-family: var(--font-serif);
   font-size: 20px;
-  line-height: 1.68;
+  line-height: 1.64;
   overflow-wrap: anywhere;
 }
 [dir="rtl"] .prose-read {
@@ -899,13 +910,13 @@ a {
   overflow: hidden;
   border: 1px solid var(--rule);
   background: var(--bg-sunk);
-  aspect-ratio: 16 / 10;
   display: grid;
   place-items: center;
 }
 .figure-frame img {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 720px;
   object-fit: contain;
 }
 .figure-nav {
@@ -977,12 +988,11 @@ a {
   color: var(--pen-text);
 }
 .prompts-word {
-  display: inline-flex;
-  direction: ltr;
   unicode-bidi: isolate;
-  align-items: baseline;
+  direction: rtl;
   white-space: nowrap;
-  font-family: "IBM Plex Sans Arabic", "Noto Naskh Arabic", var(--font-sans);
+  font-family: "Noto Naskh Arabic", "IBM Plex Sans Arabic", var(--font-sans);
+  font-weight: 600;
 }
 .src p {
   overflow-wrap: anywhere;

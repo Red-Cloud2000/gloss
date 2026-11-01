@@ -80,6 +80,7 @@ async function loadItems(dir, origin, root) {
   const rows = await mapPool(files, 32, async (file) => {
     const item = await readJson(file, null);
     if (!item || !item.id || item.status === "failed") return null;
+    if (origin === "added" && /^(error|instagram|facebook|linkedin|checking your browser.*|recaptcha.*)$/i.test(String(item.title || "").trim())) return null;
     item._origin = origin;
     if (root && item.thumbnail && !fileExists(root, item.thumbnail)) item.thumbnail = null;
     if (root && Array.isArray(item.media_files)) {

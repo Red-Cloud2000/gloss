@@ -165,7 +165,7 @@ export function StepDetail({ roadmapId, stepId }: { roadmapId: string; stepId: s
             );
           })}
           <button type="button" className="btn-ink" style={{ marginTop: 8 }} onClick={() => void submit()}>{t("check")}</button>
-          {score !== null && <p className="muted">{score} / {quiz.length}</p>}
+          {score !== null && <p className="muted"><bdi dir="ltr">{score} / {quiz.length}</bdi></p>}
         </section>
       )}
     </div>

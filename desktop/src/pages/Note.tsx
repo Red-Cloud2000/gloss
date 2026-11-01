@@ -5,11 +5,21 @@ import { useKB } from "../kb";
 import { displayTitle, formatWhen, groupFrames, mediaSrc, openExternal, youtubeId } from "../text";
 import type { Item, Raw, UserItem } from "../types";
 
-function paras(text: string) {
-  return text
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+function ArticleBody({ text }: { text: string }) {
+  const blocks = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  return blocks.map((block, i) => {
+    if (block.startsWith("## ")) return <h3 key={i} dir="auto">{block.slice(3)}</h3>;
+    const rows = block.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (rows.length > 0 && rows.every((l) => l.startsWith("- "))) {
+      return (
+        <ul key={i}>
+          {rows.map((l, j) => <li key={j} dir="auto">{l.slice(2)}</li>)}
+        </ul>
+      );
+    }
+    if (block.includes("\n")) return <p key={i} dir="auto" style={{ whiteSpace: "pre-wrap" }}>{block}</p>;
+    return <p key={i} dir="auto">{block}</p>;
+  });
 }
 
 function Gallery({ origin, frames, label }: { origin: string; frames: string[]; label: string }) {
@@ -30,7 +40,7 @@ function Gallery({ origin, frames, label }: { origin: string; frames: string[]; 
       {alive.length > 1 && (
         <div className="figure-nav">
           <button type="button" className="btn-line" onClick={() => setI((n) => (n - 1 + alive.length) % alive.length)}>‹</button>
-          <span className="kicker">{Math.min(i, alive.length - 1) + 1} / {alive.length}</span>
+          <bdi className="kicker" dir="ltr">{Math.min(i, alive.length - 1) + 1} / {alive.length}</bdi>
           <button type="button" className="btn-line" onClick={() => setI((n) => (n + 1) % alive.length)}>›</button>
         </div>
       )}
@@ -142,7 +152,9 @@ export function NotePage({ id }: { id: string }) {
   const summary = lang === "en" ? item.detailed_summary_en || item.detailed_summary || "" : item.detailed_summary || item.detailed_summary_en || "";
   const points = item.key_points || [];
   const post = raw?.post_text || "";
-  const blocks = paras(post);
+  const pdfText = (raw?.transcripts || []).find((tr) => tr.startsWith("PDF TEXT:"))?.replace(/^PDF TEXT:\n?/, "") || "";
+  const body = post.trim() || pdfText.trim();
+  const avatar = item.source_meta?.avatar ? mediaSrc(origin, item.source_meta.avatar) : "";
   const frames = groupFrames(raw?.frames || []);
   const vid = youtubeId(item.original_url) || youtubeId(item.resolved_url as string | undefined);
   const localVideo = item.source_meta?.local_video ? mediaSrc(origin, item.source_meta.local_video) : "";
@@ -153,7 +165,10 @@ export function NotePage({ id }: { id: string }) {
       <button type="button" className="back" onClick={() => go({ page: "library" })}>{t("backLib")}</button>
       <p className="kicker">{item.platform} · {item.content_type} · {formatWhen(item.date_saved)}</p>
       <h1 className="note-title" dir="auto">{title}</h1>
-      <p className="note-by" dir="auto">{[item.author, formatWhen(item.post_date)].filter(Boolean).join(" · ")}</p>
+      <p className="note-by" dir="auto">
+        {avatar && <img className="avatar" src={avatar} alt="" />}
+        {[item.author, formatWhen(item.post_date)].filter(Boolean).join(" · ")}
+      </p>
       <div className="origin-row">
         <button type="button" className="origin-link" onClick={() => openExternal(item.original_url)}>{t("original")}</button>
         <span className="url-clip">{item.original_url}</span>
@@ -217,7 +232,7 @@ export function NotePage({ id }: { id: string }) {
       <div className="reader">
         <div className="prose-read" ref={setProseEl}>
           <h2 style={{ fontSize: 22, marginTop: 0 }}>{t("originalText")}</h2>
-          {blocks.length ? blocks.map((p, i) => <p key={i} dir="auto" data-block={i}>{p}</p>) : <p className="muted">{t("emptyOriginal")}</p>}
+          {body ? <ArticleBody text={body} /> : <p className="muted">{t("emptyOriginal")}</p>}
         </div>
         <aside className="margin" aria-label={t("yourNotes")}>
           {glosses.map((g) => (
@@ -240,7 +255,7 @@ export function NotePage({ id }: { id: string }) {
         }}
       />
 
-      {(raw?.transcripts || []).map((tr, i) => (
+      {(raw?.transcripts || []).filter((tr) => !(pdfText && tr.startsWith("PDF TEXT:") && !post.trim())).map((tr, i) => (
         <section key={i} className="brief">
           <h2>{t("transcript")}</h2>
           <pre className="codeblock" dir="auto">{tr}</pre>

@@ -46,7 +46,7 @@ export type Item = Slim & {
   techniques?: string[];
   suggested_category?: string;
   roadmap_stage?: string;
-  source_meta?: { local_video?: string | null; warnings?: string[]; has_transcript?: boolean };
+  source_meta?: { local_video?: string | null; warnings?: string[]; has_transcript?: boolean; avatar?: string | null };
   raw_file?: string;
   media_dir?: string | null;
   _origin?: "corpus" | "added";

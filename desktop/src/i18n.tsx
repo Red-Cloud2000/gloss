@@ -73,6 +73,7 @@ const dict = {
   paste: ["لصق نص", "Paste text"],
   pastePh: ["ألصق النص هنا", "Paste the text here"],
   keep: ["احتفظ به", "Keep"],
+  readLink: ["اقرأ", "Read"],
   linkPh: ["ألصق رابط LinkedIn أو YouTube أو أي صفحة", "Paste a LinkedIn, YouTube, or any page link"],
   emptyOriginal: ["النص الأصلي غير متاح لهذا الرابط. الملخص أعلاه هو ما أمكن قراءته.", "The original text is not available. The summary above is what could be read."],
   backLib: ["العودة إلى المكتبة", "Back to the library"],
