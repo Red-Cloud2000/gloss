@@ -1,4 +1,3 @@
-@import "tailwindcss";
 @import "@fontsource/newsreader/400.css";
 @import "@fontsource/newsreader/500.css";
 @import "@fontsource/newsreader/600.css";
@@ -128,11 +127,6 @@
 *::after {
   box-sizing: border-box;
 }
-html,
-body,
-#root {
-  height: 100%;
-}
 html {
   background: var(--bg);
   text-rendering: optimizeLegibility;
@@ -145,7 +139,6 @@ body {
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.5;
-  overflow: hidden;
 }
 body::before {
   content: "";
@@ -170,19 +163,19 @@ select {
   font: inherit;
   color: inherit;
 }
-button {
+:where(.kb-sheet) button {
   cursor: pointer;
   background: none;
   border: 0;
   padding: 0;
 }
-img,
-video,
-iframe,
-svg {
+:where(.kb-sheet) img,
+:where(.kb-sheet) video,
+:where(.kb-sheet) iframe,
+:where(.kb-sheet) svg {
   max-width: 100%;
 }
-a {
+:where(.kb-sheet) a {
   color: inherit;
 }
 

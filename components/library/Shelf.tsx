@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState, ViewTransition } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, ViewTransition } from "react";
 import { fmtMinutes, groupOf, lookOf, type Book, type Sort, type TagKey, type TopicKey } from "@/lib/library";
 import { Glyph, Spine } from "./Book";
 
@@ -158,6 +158,32 @@ export function Shelf({
   const visible = useMemo(() => books.filter((b) => shown.has(b.id)), [books, shown]);
   const { pos, labels, rows, ends } = useMemo(() => shelve(visible, width, sort), [visible, width, sort]);
 
+  /* A full corpus is thousands of spines. Draw the ones near the window; the planks stay. */
+  const many = visible.length > 80;
+  const [band, setBand] = useState({ top: -800, bottom: 4000 });
+  useEffect(() => {
+    if (!many) return;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const el = ref.current;
+      if (!el) return;
+      const pageTop = window.scrollY + el.getBoundingClientRect().top;
+      setBand({ top: window.scrollY - pageTop - 900, bottom: window.scrollY - pageTop + window.innerHeight + 900 });
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    };
+    measure();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [many, width, rows]);
+
   // A book taken off the shelf stays where it last stood while it fades; one
   // coming back appears at its new place without sliding across the room.
   const last = useRef(new Map<string, Pos>());
@@ -242,6 +268,7 @@ export function Shelf({
       </div>
 
       {width > 0 && placed.map(({ b, at, out, jump }) => {
+        if (many && (out || at.y > band.bottom || at.y + 280 < band.top)) return null;
         const look = lookOf(b);
         const i = order.get(b.id) ?? 0;
         return (

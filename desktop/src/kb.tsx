@@ -53,9 +53,7 @@ export function KBProvider({
   const persistUi = (next: { lang?: Lang; theme?: string; collapsed?: boolean }) => {
     const cur = { lang, theme, collapsed, ...next };
     localStorage.setItem("gloss-kb-ui", JSON.stringify(cur));
-    document.documentElement.lang = cur.lang === "en" ? "en" : "ar";
-    document.documentElement.dir = cur.lang === "en" ? "ltr" : "rtl";
-    document.documentElement.dataset.theme = cur.theme || "paper";
+    if (cur.theme) document.documentElement.dataset.theme = cur.theme;
   };
 
   const setLang = (l: Lang) => {
@@ -74,6 +72,14 @@ export function KBProvider({
   };
 
   const go = useCallback((r: Route) => {
+    if (r.page === "note") {
+      document.dispatchEvent(new CustomEvent("gloss-nav", { detail: `/read/${r.noteId}` }));
+      return;
+    }
+    if (r.page === "library") {
+      document.dispatchEvent(new CustomEvent("gloss-nav", { detail: "/library" }));
+      return;
+    }
     setRoute(r);
     setVisited((prev) => {
       const next = new Map(prev);
@@ -107,10 +113,9 @@ export function KBProvider({
 
   useEffect(() => {
     document.documentElement.lang = lang === "en" ? "en" : "ar";
-    document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
-    document.documentElement.dataset.theme = theme || "paper";
+    document.documentElement.dir = "ltr";
     document.title = "Gloss";
-  }, [lang, theme]);
+  }, [lang]);
 
   const value: Ctx = {
     data, lang, setLang, theme, setTheme, route, go, visited, refresh, patchUser, setSteps, setQuizLocal, setChats,

@@ -1,21 +1,12 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { api } from "./api";
-import { Shell } from "./App";
-import { I18nProvider } from "./i18n";
-import { KBProvider, useKB } from "./kb";
+import { Host } from "./host";
+import { KBProvider } from "./kb";
 import { GlossMark } from "./mark";
 import type { Bootstrap } from "./types";
 import "./styles.css";
-
-function Frame() {
-  const { lang } = useKB();
-  return (
-    <I18nProvider lang={lang}>
-      <Shell />
-    </I18nProvider>
-  );
-}
+import "./gloss.css";
 
 function Boot() {
   const [data, setData] = useState<Bootstrap | null>(null);
@@ -47,7 +38,7 @@ function Boot() {
   }
   return (
     <KBProvider initial={data}>
-      <Frame />
+      <Host />
     </KBProvider>
   );
 }

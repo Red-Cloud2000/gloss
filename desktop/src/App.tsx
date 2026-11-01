@@ -101,7 +101,9 @@ export function Shell() {
     <div className="shell">
       <aside className={collapsed ? "sidebar is-collapsed" : "sidebar"}>
         <div className="side-brand">
-          <GlossMark />
+          <button type="button" className="icon-btn" aria-label="Back to Gloss" title="Back to Gloss" onClick={() => document.dispatchEvent(new CustomEvent("gloss-close"))}>
+            <GlossMark />
+          </button>
           {!collapsed && <span className="wordmark">Gloss</span>}
           <button type="button" className="icon-btn" style={{ marginInlineStart: collapsed ? 0 : "auto" }} aria-label={collapsed ? t("expand") : t("collapse")} onClick={() => setCollapsed(!collapsed)}>
             <PanelLeft size={18} />

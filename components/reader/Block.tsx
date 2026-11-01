@@ -120,6 +120,17 @@ function repairSrc(src: string): string {
   }
 }
 
+function Figure({ src, alt }: { src: string; alt?: string }) {
+  const s = repairSrc(src);
+  if (/youtube\.com\/embed|youtube-nocookie\.com\/embed/.test(s)) {
+    return <iframe className="fig-img is-loaded" src={s} title={alt || "Video"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{ aspectRatio: "16 / 9", width: "100%", border: 0, borderRadius: 8 }} />;
+  }
+  if (/\.(mp4|webm)(\?|$)/i.test(s)) {
+    return <video className="fig-img is-loaded" src={s} controls playsInline style={{ width: "100%", borderRadius: 8 }} />;
+  }
+  return <Picture src={s} alt={alt} />;
+}
+
 function Picture({ src, alt }: { src: string; alt?: string }) {
   const [state, setState] = useState<"loading" | "ok" | "gone">("loading");
   if (state === "gone") return null;
@@ -194,7 +205,7 @@ function BlockImpl({ block, n, first, marks, activeGloss, hoverGloss, activeHigh
           {n}
         </button>
       )}
-      {block.type === "figure" && block.src && <Picture src={block.src} alt={block.alt} />}
+      {block.type === "figure" && block.src && <Figure src={block.src} alt={block.alt} />}
       {block.type === "table" && block.rows ? (
         <Table rows={block.rows} head={block.head} />
       ) : block.type === "figure" ? (

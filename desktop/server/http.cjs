@@ -328,14 +328,69 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { hits });
     }
 
+    if (p === "/api/key" && req.method === "GET") {
+      return send(res, 200, { house: true, free: { left: 1, signedIn: false } });
+    }
+    if (p === "/api/key" && req.method === "POST") {
+      const body = await readBody(req);
+      const key = String(body.apiKey || "").trim();
+      return send(res, 200, { ok: key.length > 8 });
+    }
+
+    if (p === "/api/brief" && req.method === "POST") {
+      const body = await readBody(req);
+      const paras = Array.isArray(body.doc?.paras) ? body.doc.paras : [];
+      const title = String(body.doc?.title || "");
+      const c = await cat();
+      let item = null;
+      if (title) {
+        for (const it of c.items.values()) {
+          if (it.title === title || it.title_en === title || it.title_ar === title) {
+            item = it;
+            break;
+          }
+        }
+      }
+      if (item && (item.detailed_summary || item.one_line)) {
+        const claims = (item.key_points || []).filter(Boolean).slice(0, 6).map((text, i) => ({ text, cite: paras[i]?.n || i + 1 }));
+        return send(res, 200, {
+          brief: {
+            gist: item.detailed_summary || item.one_line,
+            claims,
+            caveats: [],
+            sections: [{ title: "Summary", start: paras[0]?.n || 1 }],
+          },
+        });
+      }
+      const gist = paras
+        .slice(0, 2)
+        .map((para) => para.text)
+        .join(" ")
+        .slice(0, 700);
+      const claims = paras.slice(0, 4).map((para) => ({ text: String(para.text || "").slice(0, 220), cite: para.n }));
+      const sections = paras.filter((_, i) => i % 6 === 0).slice(0, 8).map((para) => ({ title: String(para.text || "").slice(0, 42), start: para.n }));
+      if (!gist) return send(res, 200, { error: "There is nothing to gloss yet." });
+      return send(res, 200, { brief: { gist, claims, caveats: [], sections: sections.length ? sections : [{ title: "The text", start: 1 }] } });
+    }
+
     if ((p === "/api/ask" || p === "/api/chat") && req.method === "POST") {
       const body = await readBody(req);
       const c = await cat();
-      const lang = body.lang === "en" ? "en" : "ar";
-      const question = String(body.question || body.selection || "").trim();
+      const sample = String(body.doc?.paras?.[0]?.text || body.question || body.thread?.question || "");
+      const lang = body.lang === "en" || body.lang === "ar" ? body.lang : /[\u0600-\u06FF]/.test(sample) ? "ar" : "en";
+      const question = String(body.question || body.thread?.question || body.selection || body.thread?.quote || "").trim();
       if (!question) return send(res, 400, { error: "Ask something first." });
       let contexts = [];
-      if (p === "/api/ask" && body.itemId && c.items.has(body.itemId)) {
+      if (Array.isArray(body.doc?.paras) && body.doc.paras.length) {
+        contexts = [
+          {
+            id: "passage",
+            title: body.doc.title || "This text",
+            url: "",
+            text: body.doc.paras.map((para) => `(¶${para.n}) ${para.text}`).join("\n").slice(0, 12000),
+          },
+        ];
+      } else if (p === "/api/ask" && body.itemId && c.items.has(body.itemId)) {
         const it = c.items.get(body.itemId);
         let raw = null;
         const file = rawFile(c, it);

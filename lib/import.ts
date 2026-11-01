@@ -17,10 +17,20 @@ export async function importFromUrl(raw: string, onProgress?: (p: number, label?
       if (r.ok) r.article.sourceUrl ??= raw.trim();
       return r;
     }
-    const j = (await res.json()) as { article?: Article; error?: string };
-    return j.article ? { ok: true, article: j.article } : { ok: false, error: j.error ?? "Could not import that page." };
-  } catch {
-    return { ok: false, error: "Could not reach the importer. Check your connection." };
+    const j = (await res.json()) as { article?: Article; error?: string; jobId?: string; itemId?: string };
+    if (j.article) return { ok: true, article: j.article };
+    const itemId = j.itemId || (j.jobId ? await waitForJob(j.jobId, onProgress) : "");
+    if (itemId) {
+      const got = await fetch(`/api/items/${itemId}`);
+      const body = (await got.json()) as { item?: unknown; raw?: unknown; error?: string };
+      if (!got.ok || !body.item) return { ok: false, error: body.error ?? "Could not import that page." };
+      const { articleFromKb } = await import("./kb-article");
+      const article = articleFromKb(body.item, body.raw);
+      return article ? { ok: true, article } : { ok: false, error: "There was nothing readable on that page." };
+    }
+    return { ok: false, error: j.error ?? "Could not import that page." };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error && e.message ? e.message : "Could not reach the importer. Check your connection." };
   }
 }
 
@@ -63,9 +73,24 @@ export async function keep(a: Article, file?: Blob, extra?: Partial<LibraryItem>
   if (!(await saveDoc(a))) return "This browser's storage is full. Remove something from your shelf and try again.";
   // The original is a nicety for reading it again; the text is what matters, so a failure here is quiet.
   if (file) await savePdf(a.id, file);
-  useStore.getState().addToLibrary(a, wordCount(a), extra);
-  if (!extra?.topic) void shelveText(a);
+  const topic = extra?.topic ?? a.topic;
+  useStore.getState().addToLibrary(a, wordCount(a), topic ? { ...extra, topic } : extra);
+  if (!topic) void shelveText(a);
   return null;
+}
+
+/** The desktop importer answers with a job, then the saved note. */
+async function waitForJob(jobId: string, onProgress?: (p: number, label?: string) => void): Promise<string> {
+  for (let i = 0; i < 150; i++) {
+    await new Promise((r) => setTimeout(r, 800));
+    const res = await fetch(`/api/jobs/${jobId}`);
+    if (!res.ok) continue;
+    const job = (await res.json()) as { status?: string; itemId?: string; error?: string; pct?: number; label?: string };
+    if (typeof job.pct === "number") onProgress?.(job.pct, job.label);
+    if (job.status === "done" && job.itemId) return job.itemId;
+    if (job.status === "error") throw new Error(job.error || "Could not import that page.");
+  }
+  throw new Error("Still reading that page. It will show up in the library when it finishes.");
 }
 
 export const looksLikeUrl = (s: string) => /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(s.trim()) && !/\s/.test(s.trim());
