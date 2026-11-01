@@ -1,0 +1,97 @@
+{
+  "name": "gloss-knowledge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gloss knowledge base — Windows desktop app",
+  "author": "Gloss",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev:api": "node server/http.cjs",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "NODE_ENV=production node server/http.cjs",
+    "electron": "electron .",
+    "dist:win": "node scripts/fetch-win-bins.cjs && npm run build && electron-builder --win nsis --x64",
+    "check": "node server/check.cjs"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-sans-arabic": "^5.2.8",
+    "@fontsource/newsreader": "^5.2.8",
+    "@fontsource/noto-naskh-arabic": "^5.2.8",
+    "@fontsource/schibsted-grotesk": "^5.2.8",
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.18.13",
+    "lucide-react": "^0.544.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.3",
+    "electron": "^35.7.5",
+    "electron-builder": "^26.0.12",
+    "playwright": "^1.64.1",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
+  },
+  "build": {
+    "appId": "io.usegloss.knowledge",
+    "productName": "Gloss",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "server/**",
+      "shared/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "../vendor-sample/sample/data",
+        "to": "sample-data"
+      },
+      {
+        "from": "vendor-bin",
+        "to": "bin",
+        "filter": ["*.exe"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Gloss-Knowledge-Setup.${ext}",
+      "shortcutName": "Gloss",
+      "uninstallDisplayName": "Gloss",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": "dir",
+      "icon": "assets/icon.png"
+    }
+  }
+}
